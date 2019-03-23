@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import os
-from ctypes import CDLL, byref, c_char_p, c_void_p, create_string_buffer
-from ctypes.util import find_library
+from ctypes import byref, c_char_p, c_void_p, create_string_buffer
 from itertools import chain
 from typing import Callable, Dict, Iterable, Optional, Tuple, Type, TypeVar, Union
 
@@ -30,10 +29,6 @@ def _infer_value(value: bytes) -> Union[int, str]:
 
 _FT = TypeVar('_FT')
 _BUFFER_LEN = 64
-
-_free = CDLL(find_library('c')).free
-_free.argtypes = (c_void_p,)
-_free.restype = None
 
 
 class CGroup:
@@ -170,9 +165,7 @@ class CGroup:
         ret = cgroup_get_current_controller_path(pid, controller.encode(), byref(name_path))
         if ret is not 0:
             _raise_error(ret)
-        path = str(name_path)
-        _free(name_path)
-        return cls.from_existing(path, auto_delete, auto_delete_flag)
+        return cls.from_existing(str(name_path), auto_delete, auto_delete_flag)
 
     def delete(self, del_flag: DeleteFlag = DeleteFlag.NONE) -> None:
         if self._deleted:
