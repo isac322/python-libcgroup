@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import os
-from ctypes import byref, c_void_p, create_string_buffer
+from ctypes import CDLL, byref, c_char_p, c_void_p, create_string_buffer
+from ctypes.util import find_library
 from typing import Any, Callable, Dict, Iterable, Tuple, Union
 
 from libcgroup_bind.error import ErrorCode
@@ -14,7 +15,7 @@ from libcgroup_bind.groups import (
     cgroup_set_uid_gid
 )
 from libcgroup_bind.iterators import cgroup_read_value_begin, cgroup_read_value_end, cgroup_read_value_next
-from libcgroup_bind.tasks import cgroup_attach_task, cgroup_attach_task_pid
+from libcgroup_bind.tasks import cgroup_attach_task, cgroup_attach_task_pid, cgroup_get_current_controller_path
 
 from .tools import _raise_error, all_controller_names_bytes
 
@@ -28,6 +29,10 @@ def _infer_value(value: bytes) -> Union[int, str]:
 
 InferFunc = Callable[[bytes], Any]
 _BUFFER_LEN = 64
+
+_free = CDLL(find_library('c')).free
+_free.argtypes = (c_void_p,)
+_free.restype = None
 
 
 class CGroup:
@@ -156,6 +161,17 @@ class CGroup:
                 obj._controllers[controller] = cg_ctrl
 
         return obj
+
+    @classmethod
+    def from_pid(cls, pid: int, controller: str,
+                 auto_delete: bool = False, auto_delete_flag: DeleteFlag = DeleteFlag.NONE) -> CGroup:
+        name_path = c_char_p()
+        ret = cgroup_get_current_controller_path(pid, controller.encode(), byref(name_path))
+        if ret is not 0:
+            _raise_error(ret)
+        path = str(name_path)
+        _free(name_path)
+        return cls.from_existing(path, auto_delete, auto_delete_flag)
 
     def delete(self, del_flag: DeleteFlag = DeleteFlag.NONE) -> None:
         if self._deleted:
