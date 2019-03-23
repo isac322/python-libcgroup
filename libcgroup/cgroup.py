@@ -6,7 +6,7 @@ import os
 from ctypes import CDLL, byref, c_char_p, c_void_p, create_string_buffer
 from ctypes.util import find_library
 from itertools import chain
-from typing import Any, Callable, Dict, Iterable, Tuple, Union
+from typing import Callable, Dict, Iterable, Optional, Tuple, Type, TypeVar, Union
 
 from libcgroup_bind.error import ErrorCode
 from libcgroup_bind.groups import (
@@ -28,7 +28,7 @@ def _infer_value(value: bytes) -> Union[int, str]:
         return value.rstrip().decode()
 
 
-InferFunc = Callable[[bytes], Any]
+_FT = TypeVar('_FT')
 _BUFFER_LEN = 64
 
 _free = CDLL(find_library('c')).free
@@ -214,7 +214,7 @@ class CGroup:
         if ret is not 0:
             _raise_error(ret)
 
-    def get(self, name: str, infer_func: InferFunc = _infer_value) -> Any:
+    def get(self, name: str, infer_func: Callable[[bytes], _FT] = _infer_value) -> _FT:
         idx = name.index('.')
         if idx + 1 == len(name):
             raise ValueError('Can not infer controller and property name.')
@@ -226,7 +226,7 @@ class CGroup:
 
         return self._get_from(controller, name.encode(), infer_func)
 
-    def _get_from(self, controller: bytes, name: bytes, infer_func: InferFunc) -> Any:
+    def _get_from(self, controller: bytes, name: bytes, infer_func: Callable[[bytes], _FT]) -> _FT:
         handle = c_void_p()
         buffer = create_string_buffer(_BUFFER_LEN)
         ret = cgroup_read_value_begin(controller, self._path.encode(), name, byref(handle), buffer, _BUFFER_LEN - 1)
@@ -255,13 +255,14 @@ class CGroup:
                 if ret is not 0:
                     _raise_error(ret)
 
-    def get_from(self, controller: str, name: str, infer_func: InferFunc = _infer_value) -> Any:
+    def get_from(self, controller: str, name: str, infer_func: Callable[[bytes], _FT] = _infer_value) -> _FT:
         return self._get_from(controller.encode(), name.encode(), infer_func)
 
-    def get_all_from(self, controller: str, infer_func: InferFunc = _infer_value) -> Iterable[Tuple[str, Any]]:
+    def get_all_from(self, controller: str,
+                     infer_func: Callable[[bytes], _FT] = _infer_value) -> Iterable[Tuple[str, _FT]]:
         return self._get_all_from(controller.encode(), infer_func)
 
-    def _get_all_from(self, controller: bytes, infer_func: InferFunc) -> Iterable[Tuple[str, Any]]:
+    def _get_all_from(self, controller: bytes, infer_func: Callable[[bytes], _FT]) -> Iterable[Tuple[str, _FT]]:
         cg_ctrl = self._controllers[controller]
         name_count = cgroup_get_value_name_count(cg_ctrl)
 
@@ -269,6 +270,6 @@ class CGroup:
             name = cgroup_get_value_name(cg_ctrl, i)
             yield name.decode(), self._get_from(controller, name, infer_func)
 
-    def get_all(self, infer_func: InferFunc = _infer_value) -> Iterable[Tuple[str, Any]]:
+    def get_all(self, infer_func: Callable[[bytes], _FT] = _infer_value) -> Iterable[Tuple[str, _FT]]:
         for controller in self._controllers:
             yield from self._get_all_from(controller, infer_func)
