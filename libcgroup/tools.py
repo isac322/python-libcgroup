@@ -2,13 +2,21 @@
 
 import errno
 import os
-from ctypes import byref, c_void_p
-from typing import Iterable, NoReturn
+from ctypes import byref, c_bool, c_char_p, c_int64, c_uint64, c_void_p, create_string_buffer
+from typing import Callable, Iterable, NoReturn, Optional, Type, TypeVar
 
 from libcgroup_bind.error import ErrorCode, cgroup_get_last_errno, cgroup_strerror
-from libcgroup_bind.iterators import (
-    MountPoint, cgroup_get_controller_begin, cgroup_get_controller_end, cgroup_get_controller_next
+from libcgroup_bind.groups import (
+    CGroupControllerPointer, cgroup_get_value_bool, cgroup_get_value_int64,
+    cgroup_get_value_string, cgroup_get_value_uint64
 )
+from libcgroup_bind.iterators import (
+    MountPoint, cgroup_get_controller_begin, cgroup_get_controller_end, cgroup_get_controller_next,
+    cgroup_read_value_begin, cgroup_read_value_end, cgroup_read_value_next
+)
+
+_FT = TypeVar('_FT')
+_BUFFER_LEN = 64
 
 
 def all_controller_names_bytes() -> Iterable[bytes]:
@@ -38,6 +46,9 @@ def create_c_array(c_type, elements, length=None):
     return (c_type * length)(*elements_tup)
 
 
+# for internal
+
+
 def _raise_error(ret: ErrorCode) -> NoReturn:
     err = cgroup_get_last_errno()
     if err is not 0:
@@ -45,3 +56,104 @@ def _raise_error(ret: ErrorCode) -> NoReturn:
         raise OSError(err, def_msg, cgroup_strerror(ret).decode())
     else:
         raise ValueError(cgroup_strerror(ret).decode())
+
+
+# reading cgroup parameter
+
+def _get_string_value(controller: CGroupControllerPointer, name: bytes) -> bytes:
+    raw_result = c_char_p()
+    ret = cgroup_get_value_string(controller, name, byref(raw_result))
+    if ret is not 0:
+        _raise_error(ret)
+
+    return raw_result.value
+
+
+def _get_int_value(controller: CGroupControllerPointer, name: bytes) -> int:
+    raw_result = c_int64()
+    ret = cgroup_get_value_int64(controller, name, byref(raw_result))
+    if ret == ErrorCode.INVAL:
+        raw_result = c_uint64()
+        ret = cgroup_get_value_uint64(controller, name, byref(raw_result))
+        if ret is not 0:
+            _raise_error(ret)
+    elif ret is not 0:
+        _raise_error(ret)
+
+    return raw_result.value
+
+
+def _get_bool_value(controller: CGroupControllerPointer, name: bytes) -> bool:
+    raw_result = c_bool()
+    ret = cgroup_get_value_bool(controller, name, byref(raw_result))
+    if ret is not 0:
+        _raise_error(ret)
+
+    return raw_result.value
+
+
+def _get_from_cached(controller: CGroupControllerPointer,
+                     name: bytes,
+                     infer_func: Callable[[bytes], _FT],
+                     val_type: Optional[Type[_FT]]) -> _FT:
+    if val_type is None:
+        ret = _get_string_value(controller, name)
+        return infer_func(ret)
+
+    elif issubclass(val_type, str):
+        ret = _get_string_value(controller, name)
+        return val_type(ret)
+
+    elif issubclass(val_type, int):
+        ret = _get_int_value(controller, name)
+        return val_type(ret)
+
+    elif issubclass(val_type, bool):
+        ret = _get_bool_value(controller, name)
+        return val_type(ret)
+
+    else:
+        ret = _get_string_value(controller, name)
+        try:
+            return val_type(ret)
+        except TypeError or ValueError:
+            return infer_func(ret)
+
+
+def _get_from_file(controller: bytes,
+                   path: bytes,
+                   name: bytes,
+                   infer_func: Callable[[bytes], _FT],
+                   val_type: Optional[Type[_FT]]) -> _FT:
+    handle = c_void_p()
+    buffer = create_string_buffer(_BUFFER_LEN)
+    ret = cgroup_read_value_begin(controller, path, name, byref(handle), buffer, _BUFFER_LEN - 1)
+
+    try:
+        if ret == ErrorCode.EOF:
+            return None
+        elif ret is not 0:
+            _raise_error(ret)
+
+        result = list(buffer.value)
+
+        while True:
+            ret = cgroup_read_value_next(byref(handle), buffer, _BUFFER_LEN - 1)
+            if ret == ErrorCode.EOF:
+                break
+            elif ret is not 0:
+                _raise_error(ret)
+
+            result += buffer.value
+
+        result = bytes(result)
+        try:
+            return val_type(result)
+        except TypeError or ValueError:
+            return infer_func(result)
+
+    finally:
+        if handle.value is not None:
+            ret = cgroup_read_value_end(byref(handle))
+            if ret is not 0:
+                _raise_error(ret)

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from ctypes import byref, c_char_p, c_void_p, create_string_buffer
+from ctypes import byref, c_char_p
 from itertools import chain
 from typing import Callable, Dict, Iterable, Optional, Tuple, Type, TypeVar, Union
 
@@ -11,24 +11,22 @@ from libcgroup_bind.error import ErrorCode
 from libcgroup_bind.groups import (
     CGroupControllerPointer, CGroupPointer, DeleteFlag, cgroup_add_controller, cgroup_compare_cgroup,
     cgroup_create_cgroup, cgroup_delete_cgroup_ext, cgroup_free, cgroup_get_cgroup, cgroup_get_controller,
-    cgroup_get_value_name, cgroup_get_value_name_count, cgroup_new_cgroup, cgroup_set_permissions,
-    cgroup_set_uid_gid
+    cgroup_get_value_name, cgroup_get_value_name_count, cgroup_new_cgroup, cgroup_set_permissions, cgroup_set_uid_gid
 )
-from libcgroup_bind.iterators import cgroup_read_value_begin, cgroup_read_value_end, cgroup_read_value_next
 from libcgroup_bind.tasks import cgroup_attach_task, cgroup_attach_task_pid, cgroup_get_current_controller_path
 
-from .tools import _raise_error, all_controller_names_bytes
+from .tools import _get_from_cached, _get_from_file, _raise_error, all_controller_names_bytes
 
 
-def _infer_value(value: bytes) -> Union[int, str]:
+def _infer_value(value: bytes) -> Union[int, str, None]:
     try:
         return int(value)
     except ValueError:
-        return value.rstrip().decode()
+        result = value.rstrip()
+        return result.decode() if result is not b'' else None
 
 
 _FT = TypeVar('_FT')
-_BUFFER_LEN = 64
 
 
 class CGroup:
@@ -207,7 +205,11 @@ class CGroup:
         if ret is not 0:
             _raise_error(ret)
 
-    def get(self, name: str, infer_func: Callable[[bytes], _FT] = _infer_value) -> _FT:
+    def get(self,
+            name: str,
+            infer_func: Callable[[bytes], _FT] = _infer_value,
+            val_type: Type[_FT] = None,
+            use_cached: bool = True) -> _FT:
         idx = name.index('.')
         if idx + 1 == len(name):
             raise ValueError('Can not infer controller and property name.')
@@ -217,52 +219,45 @@ class CGroup:
         if controller not in self._controllers:
             raise ValueError(f'Invalid controller: {controller.decode()}')
 
-        return self._get_from(controller, name.encode(), infer_func)
+        return self._get_from(controller, name.encode(), infer_func, val_type, use_cached)
 
-    def _get_from(self, controller: bytes, name: bytes, infer_func: Callable[[bytes], _FT]) -> _FT:
-        handle = c_void_p()
-        buffer = create_string_buffer(_BUFFER_LEN)
-        ret = cgroup_read_value_begin(controller, self._path.encode(), name, byref(handle), buffer, _BUFFER_LEN - 1)
+    def _get_from(self,
+                  controller: bytes,
+                  name: bytes,
+                  infer_func: Callable[[bytes], _FT],
+                  val_type: Optional[Type[_FT]],
+                  use_cached: bool) -> _FT:
+        if use_cached and name.startswith(controller):
+            return _get_from_cached(self._controllers[controller], name, infer_func, val_type)
+        else:
+            return _get_from_file(controller, self._path.encode(), name, infer_func, val_type)
 
-        try:
-            if ret == ErrorCode.EOF.value:
-                return None
-            elif ret is not 0:
-                _raise_error(ret)
-
-            result = list(buffer.value)
-
-            while True:
-                ret = cgroup_read_value_next(byref(handle), buffer, _BUFFER_LEN - 1)
-                if ret == ErrorCode.EOF.value:
-                    break
-                elif ret is not 0:
-                    _raise_error(ret)
-
-                result += buffer.value
-
-            return infer_func(bytes(result))
-        finally:
-            if handle.value is not None:
-                ret = cgroup_read_value_end(byref(handle))
-                if ret is not 0:
-                    _raise_error(ret)
-
-    def get_from(self, controller: str, name: str, infer_func: Callable[[bytes], _FT] = _infer_value) -> _FT:
-        return self._get_from(controller.encode(), name.encode(), infer_func)
+    def get_from(self,
+                 controller: str,
+                 name: str,
+                 infer_func: Callable[[bytes], _FT] = _infer_value,
+                 val_type: Type[_FT] = None,
+                 use_cached: bool = True) -> _FT:
+        return self._get_from(controller.encode(), name.encode(), infer_func, val_type, use_cached)
 
     def get_all_from(self, controller: str,
-                     infer_func: Callable[[bytes], _FT] = _infer_value) -> Iterable[Tuple[str, _FT]]:
-        return self._get_all_from(controller.encode(), infer_func)
+                     infer_func: Callable[[bytes], _FT] = _infer_value,
+                     use_cached: bool = True) -> Iterable[Tuple[str, _FT]]:
+        return self._get_all_from(controller.encode(), infer_func, use_cached)
 
-    def _get_all_from(self, controller: bytes, infer_func: Callable[[bytes], _FT]) -> Iterable[Tuple[str, _FT]]:
+    def _get_all_from(self,
+                      controller: bytes,
+                      infer_func: Callable[[bytes], _FT],
+                      use_cached: bool) -> Iterable[Tuple[str, _FT]]:
         cg_ctrl = self._controllers[controller]
         name_count = cgroup_get_value_name_count(cg_ctrl)
 
         for i in range(name_count):
             name = cgroup_get_value_name(cg_ctrl, i)
-            yield name.decode(), self._get_from(controller, name, infer_func)
+            yield name.decode(), self._get_from(controller, name, infer_func, None, use_cached)
 
-    def get_all(self, infer_func: Callable[[bytes], _FT] = _infer_value) -> Iterable[Tuple[str, _FT]]:
+    def get_all(self,
+                infer_func: Callable[[bytes], _FT] = _infer_value,
+                use_cached: bool = True) -> Iterable[Tuple[str, _FT]]:
         for controller in self._controllers:
-            yield from self._get_all_from(controller, infer_func)
+            yield from self._get_all_from(controller, infer_func, use_cached)
