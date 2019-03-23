@@ -131,8 +131,10 @@ class CGroup:
             _raise_error(ret)
 
     @classmethod
-    def from_existing(cls, name_path: Union[os.PathLike, str],
-                      auto_delete: bool = False, auto_delete_flag: DeleteFlag = DeleteFlag.NONE) -> CGroup:
+    def from_existing(cls,
+                      name_path: Union[os.PathLike, str],
+                      auto_delete: bool = False,
+                      auto_delete_flag: DeleteFlag = DeleteFlag.NONE) -> CGroup:
         obj = CGroup.__new__(cls)
 
         obj._path = name_path
@@ -157,8 +159,11 @@ class CGroup:
         return obj
 
     @classmethod
-    def from_pid(cls, pid: int, controller: str,
-                 auto_delete: bool = False, auto_delete_flag: DeleteFlag = DeleteFlag.NONE) -> CGroup:
+    def from_pid(cls,
+                 pid: int,
+                 controller: str,
+                 auto_delete: bool = False,
+                 auto_delete_flag: DeleteFlag = DeleteFlag.NONE) -> CGroup:
         name_path = c_char_p()
         ret = cgroup_get_current_controller_path(pid, controller.encode(), byref(name_path))
         if ret is not 0:
@@ -240,7 +245,8 @@ class CGroup:
                  use_cached: bool = True) -> _FT:
         return self._get_from(controller.encode(), name.encode(), infer_func, val_type, use_cached)
 
-    def get_all_from(self, controller: str,
+    def get_all_from(self,
+                     controller: str,
                      infer_func: Callable[[bytes], _FT] = _infer_value,
                      use_cached: bool = True) -> Iterable[Tuple[str, _FT]]:
         return self._get_all_from(controller.encode(), infer_func, use_cached)
