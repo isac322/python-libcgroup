@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from ctypes import CDLL, byref, c_char_p, c_void_p, create_string_buffer
 from ctypes.util import find_library
+from itertools import chain
 from typing import Any, Callable, Dict, Iterable, Tuple, Union
 
 from libcgroup_bind.error import ErrorCode
@@ -44,7 +45,7 @@ class CGroup:
     _auto_delete_flag: DeleteFlag
     _deleted: bool = False
 
-    def __init__(self, name_path: Union[os.PathLike, str], *controllers: str,
+    def __init__(self, name_path: Union[os.PathLike, str], first_controller: str, *controllers: str,
                  dir_mode: int = None, file_mode: int = None, tasks_mode: int = None,
                  t_uid: int = None, t_gid: int = None, a_uid: int = None, a_gid: int = None,
                  ignore_ownership: bool = False,
@@ -85,7 +86,7 @@ class CGroup:
             _raise_error(ErrorCode.FAIL)
 
         self._controllers = dict()
-        for controller_name in controllers:
+        for controller_name in chain((first_controller,), controllers):
             cg_ctrl = cgroup_add_controller(self._cgroup, controller_name.encode())
             if cg_ctrl is None:
                 _raise_error(ErrorCode.INVAL)
