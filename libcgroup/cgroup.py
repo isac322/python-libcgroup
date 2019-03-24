@@ -34,6 +34,7 @@ class CGroup:
     _controllers: Dict[bytes, CGroupControllerPointer]
 
     _path: Union[os.PathLike, str]
+    _raw_path: bytes
     _auto_delete: bool
     _auto_delete_flag: DeleteFlag
     _deleted: bool = False
@@ -70,6 +71,7 @@ class CGroup:
         :type auto_delete: bool
         """
         self._path = name_path
+        self._raw_path = str(name_path).encode()
 
         self._auto_delete = auto_delete
         self._auto_delete_flag = auto_delete_flag
@@ -138,11 +140,12 @@ class CGroup:
         obj = CGroup.__new__(cls)
 
         obj._path = name_path
+        obj._raw_path = str(name_path).encode()
 
         obj._auto_delete = auto_delete
         obj._auto_delete_flag = auto_delete_flag
 
-        obj._cgroup = cgroup_new_cgroup(str(name_path).encode())
+        obj._cgroup = cgroup_new_cgroup(obj._raw_path)
         if obj._cgroup is None:
             _raise_error(ErrorCode.FAIL)
 
@@ -183,7 +186,7 @@ class CGroup:
     def reload(self) -> None:
         cgroup_free(byref(self._cgroup))
 
-        self._cgroup = cgroup_new_cgroup(str(self._path).encode())
+        self._cgroup = cgroup_new_cgroup(self._raw_path)
         if self._cgroup is None:
             _raise_error(ErrorCode.FAIL)
 
@@ -235,7 +238,7 @@ class CGroup:
         if use_cached and name.startswith(controller):
             return _get_from_cached(self._controllers[controller], name, infer_func, val_type)
         else:
-            return _get_from_file(controller, self._path.encode(), name, infer_func, val_type)
+            return _get_from_file(controller, self._raw_path, name, infer_func, val_type)
 
     def get_from(self,
                  controller: str,
