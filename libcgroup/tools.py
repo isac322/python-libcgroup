@@ -100,6 +100,10 @@ def _get_from_cached(controller: CGroupControllerPointer,
         ret = _get_string_value(controller, name)
         return infer_func(ret)
 
+    elif val_type is str:
+        ret = _get_string_value(controller, name)
+        return ret.decode()
+
     elif issubclass(val_type, str):
         ret = _get_string_value(controller, name)
         return val_type(ret)
@@ -148,7 +152,10 @@ def _get_from_file(controller: bytes,
 
         result = bytes(result)
         try:
-            return val_type(result)
+            if val_type is str:
+                return result.decode()
+            else:
+                return val_type(result)
         except TypeError or ValueError:
             return infer_func(result)
 
