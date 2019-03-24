@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from ctypes import byref, c_char_p
+from ctypes import byref, c_char_p, c_int
 from itertools import chain
 from typing import Callable, Dict, Iterable, Optional, Tuple, Type, TypeVar, Union
 
@@ -11,8 +11,10 @@ from libcgroup_bind.error import ErrorCode
 from libcgroup_bind.groups import (
     CGroupControllerPointer, CGroupPointer, DeleteFlag, cgroup_add_controller, cgroup_compare_cgroup,
     cgroup_create_cgroup, cgroup_delete_cgroup_ext, cgroup_free, cgroup_get_cgroup, cgroup_get_controller,
-    cgroup_get_value_name, cgroup_get_value_name_count, cgroup_new_cgroup, cgroup_set_permissions, cgroup_set_uid_gid
+    cgroup_get_procs, cgroup_get_value_name, cgroup_get_value_name_count, cgroup_new_cgroup, cgroup_set_permissions,
+    cgroup_set_uid_gid
 )
+from libcgroup_bind.iterators import c_int_p
 from libcgroup_bind.tasks import cgroup_attach_task, cgroup_attach_task_pid, cgroup_get_current_controller_path
 
 from .tools import _get_from_cached, _get_from_file, _raise_error, all_controller_names_bytes
@@ -212,6 +214,16 @@ class CGroup:
         ret = cgroup_attach_task(self._cgroup)
         if ret is not 0:
             _raise_error(ret)
+
+    def get_processes(self, controller: str) -> Iterable[int]:
+        pids = c_int_p()
+        size = c_int()
+
+        ret = cgroup_get_procs(self._raw_path, controller.encode(), byref(pids), byref(size))
+        if ret is not 0:
+            _raise_error(ret)
+
+        return (pids[i] for i in range(size.value))
 
     def get(self,
             name: str,
