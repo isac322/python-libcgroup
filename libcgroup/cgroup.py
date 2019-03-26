@@ -216,7 +216,7 @@ class CGroup:
         if ret is not 0:
             _raise_error(ret)
 
-    def get_processes(self, controller: str) -> Iterable[int]:
+    def get_processes_of(self, controller: str) -> Iterable[int]:
         pids = c_int_p()
         size = c_int()
 
