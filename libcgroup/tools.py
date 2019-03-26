@@ -153,7 +153,7 @@ def _get_from_file(controller: bytes,
         result = bytes(result)
         try:
             if val_type is str:
-                return result.decode()
+                return result.rstrip().decode()
             else:
                 return val_type(result)
         except TypeError or ValueError:
