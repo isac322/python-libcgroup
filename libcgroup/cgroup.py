@@ -204,10 +204,11 @@ class CGroup:
                 _raise_error(ErrorCode.INVAL)
 
     # TODO: add sticky option
-    def add_thread(self, pid: int) -> None:
-        ret = cgroup_attach_task_pid(self._cgroup, pid)
-        if ret is not 0:
-            _raise_error(ret)
+    def add_threads(self, *pids: int) -> None:
+        for pid in pids:
+            ret = cgroup_attach_task_pid(self._cgroup, pid)
+            if ret is not 0:
+                _raise_error(ret)
 
     # TODO: add sticky option
     def add_current_thread(self) -> None:
@@ -224,6 +225,12 @@ class CGroup:
             _raise_error(ret)
 
         return (pids[i] for i in range(size.value))
+
+    def add_processes(self, *processes: int) -> None:
+        for tgid in processes:
+            for name, controller in self._controllers.items():
+                _set_of(controller, b'cgroup.procs', tgid)
+                self._modify()
 
     def get(self,
             name: str,
