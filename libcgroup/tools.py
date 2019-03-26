@@ -7,9 +7,9 @@ from typing import Callable, Iterable, NoReturn, Optional, Type, TypeVar, Union
 
 from libcgroup_bind.error import ErrorCode, cgroup_get_last_errno, cgroup_strerror
 from libcgroup_bind.groups import (
-    CGroupControllerPointer, cgroup_add_value_bool, cgroup_add_value_int64, cgroup_add_value_string,
-    cgroup_add_value_uint64, cgroup_get_value_bool, cgroup_get_value_int64, cgroup_get_value_string,
-    cgroup_get_value_uint64
+    CGroupControllerPointer, cgroup_get_value_bool, cgroup_get_value_int64, cgroup_get_value_string,
+    cgroup_get_value_uint64, cgroup_set_value_bool, cgroup_set_value_int64, cgroup_set_value_string,
+    cgroup_set_value_uint64
 )
 from libcgroup_bind.iterators import (
     MountPoint, cgroup_get_controller_begin, cgroup_get_controller_end, cgroup_get_controller_next,
@@ -167,19 +167,19 @@ def _get_from_file(controller: bytes,
                 _raise_error(ret)
 
 
-def _add_to(controller: CGroupControllerPointer, name: bytes, value: Union[int, bool, str, bytes]) -> None:
+def _set_of(controller: CGroupControllerPointer, name: bytes, value: Union[int, bool, str, bytes]) -> None:
     if isinstance(value, str):
         value = value.encode()
 
     if isinstance(value, bytes):
-        ret = cgroup_add_value_string(controller, name, value)
+        ret = cgroup_set_value_string(controller, name, value)
     elif isinstance(value, int):
         if value > 0:
-            ret = cgroup_add_value_uint64(controller, name, value)
+            ret = cgroup_set_value_uint64(controller, name, value)
         else:
-            ret = cgroup_add_value_int64(controller, name, value)
+            ret = cgroup_set_value_int64(controller, name, value)
     elif isinstance(value, bool):
-        ret = cgroup_add_value_bool(controller, name, value)
+        ret = cgroup_set_value_bool(controller, name, value)
     else:
         raise ValueError(f'Unsupported value type: {type(value)}')
 
