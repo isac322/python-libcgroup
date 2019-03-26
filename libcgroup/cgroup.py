@@ -226,6 +226,17 @@ class CGroup:
 
         return (pids[i] for i in range(size.value))
 
+    def get_processes(self) -> Iterable[int]:
+        pids = c_int_p()
+        size = c_int()
+
+        key_controller = next(iter(self._controllers.keys()))
+        ret = cgroup_get_procs(self._raw_path, key_controller, byref(pids), byref(size))
+        if ret is not 0:
+            _raise_error(ret)
+
+        return (pids[i] for i in range(size.value))
+
     def add_processes(self, *processes: int) -> None:
         for tgid in processes:
             for name, controller in self._controllers.items():
