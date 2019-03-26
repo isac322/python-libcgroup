@@ -11,13 +11,13 @@ from libcgroup_bind.error import ErrorCode
 from libcgroup_bind.groups import (
     CGroupControllerPointer, CGroupPointer, DeleteFlag, cgroup_add_controller, cgroup_compare_cgroup,
     cgroup_create_cgroup, cgroup_delete_cgroup_ext, cgroup_free, cgroup_get_cgroup, cgroup_get_controller,
-    cgroup_get_procs, cgroup_get_value_name, cgroup_get_value_name_count, cgroup_new_cgroup, cgroup_set_permissions,
-    cgroup_set_uid_gid
+    cgroup_get_procs, cgroup_get_value_name, cgroup_get_value_name_count, cgroup_modify_cgroup, cgroup_new_cgroup,
+    cgroup_set_permissions, cgroup_set_uid_gid
 )
 from libcgroup_bind.iterators import c_int_p
 from libcgroup_bind.tasks import cgroup_attach_task, cgroup_attach_task_pid, cgroup_get_current_controller_path
 
-from .tools import _get_from_cached, _get_from_file, _raise_error, all_controller_names_bytes
+from .tools import _add_to, _get_from_cached, _get_from_file, _raise_error, all_controller_names_bytes
 
 
 def _infer_value(value: bytes) -> Union[int, str, None]:
@@ -282,3 +282,28 @@ class CGroup:
                 use_cached: bool = True) -> Iterable[Tuple[str, _FT]]:
         for controller in self._controllers:
             yield from self._get_all_from(controller, infer_func, use_cached)
+
+    def add_value_to(self, controller: str, name: str, value: Union[int, bool, str, bytes]) -> None:
+        if controller not in self._controllers:
+            raise ValueError(f'Invalid controller: {controller}')
+
+        _add_to(self._controllers[controller.encode()], name.encode(), value)
+        self._modify()
+
+    def add_value(self, name: str, value: Union[int, bool, str, bytes]) -> None:
+        idx = name.index('.')
+        if idx + 1 == len(name):
+            raise ValueError('Can not infer controller and property name.')
+
+        controller = name[:idx].encode()
+
+        if controller not in self._controllers:
+            raise ValueError(f'Invalid controller: {controller.decode()}')
+
+        _add_to(self._controllers[controller], name.encode(), value)
+        self._modify()
+
+    def _modify(self) -> None:
+        ret = cgroup_modify_cgroup(self._cgroup)
+        if ret is not 0:
+            _raise_error(ret)
