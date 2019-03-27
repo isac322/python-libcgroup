@@ -22,18 +22,21 @@ _BUFFER_LEN = 64
 
 def all_controller_names_bytes() -> Iterable[bytes]:
     handler = c_void_p()
-
     controller = MountPoint()
-    ret = cgroup_get_controller_begin(byref(handler), byref(controller))
 
-    while ret is 0:
-        yield controller.name
-        ret = cgroup_get_controller_next(byref(handler), byref(controller))
+    try:
+        ret = cgroup_get_controller_begin(byref(handler), byref(controller))
 
-    if ret != ErrorCode.EOF:
-        _raise_error(ret)
+        while ret is 0:
+            yield controller.name
+            ret = cgroup_get_controller_next(byref(handler), byref(controller))
 
-    cgroup_get_controller_end(byref(handler))
+        if ret != ErrorCode.EOF:
+            _raise_error(ret)
+    finally:
+        ret = cgroup_get_controller_end(byref(handler))
+        if ret is not 0:
+            _raise_error(ret)
 
 
 def all_controller_names() -> Iterable[str]:
