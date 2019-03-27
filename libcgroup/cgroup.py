@@ -17,7 +17,7 @@ from libcgroup_bind.groups import (
 from libcgroup_bind.iterators import c_int_p
 from libcgroup_bind.tasks import cgroup_attach_task, cgroup_attach_task_pid, cgroup_get_current_controller_path
 
-from .tools import _get_from_cached, _get_from_file, _raise_error, _set_of, all_controller_names_bytes
+from .tools import _get_from_cached, _get_from_file, _get_threads_of, _raise_error, _set_of, all_controller_names_bytes
 
 
 def _infer_value(value: bytes) -> Union[int, str, None]:
@@ -202,6 +202,13 @@ class CGroup:
                 self._controllers[controller] = cg_ctrl
             else:
                 _raise_error(ErrorCode.INVAL)
+
+    def get_threads_of(self, controller: str) -> Iterable[int]:
+        return _get_threads_of(controller.encode(), self._raw_path)
+
+    def get_threads(self) -> Iterable[int]:
+        key_controller = next(iter(self._controllers.keys()))
+        return _get_threads_of(key_controller, self._raw_path)
 
     # TODO: add sticky option
     def add_threads(self, *pids: int) -> None:

@@ -2,7 +2,7 @@
 
 import errno
 import os
-from ctypes import byref, c_bool, c_char_p, c_int64, c_uint64, c_void_p, create_string_buffer
+from ctypes import byref, c_bool, c_char_p, c_int, c_int64, c_uint64, c_void_p, create_string_buffer
 from typing import Callable, Iterable, NoReturn, Optional, Type, TypeVar, Union
 
 from libcgroup_bind.error import ErrorCode, cgroup_get_last_errno, cgroup_strerror
@@ -13,7 +13,8 @@ from libcgroup_bind.groups import (
 )
 from libcgroup_bind.iterators import (
     MountPoint, cgroup_get_controller_begin, cgroup_get_controller_end, cgroup_get_controller_next,
-    cgroup_read_value_begin, cgroup_read_value_end, cgroup_read_value_next
+    cgroup_get_task_begin, cgroup_get_task_end, cgroup_get_task_next, cgroup_read_value_begin, cgroup_read_value_end,
+    cgroup_read_value_next
 )
 
 _FT = TypeVar('_FT')
@@ -188,3 +189,23 @@ def _set_of(controller: CGroupControllerPointer, name: bytes, value: Union[int, 
 
     if ret is not 0:
         _raise_error(ret)
+
+
+def _get_threads_of(controller: bytes, path: bytes) -> Iterable[int]:
+    handler = c_void_p()
+    pid = c_int()
+
+    try:
+        ret = cgroup_get_task_begin(path, controller, byref(handler), byref(pid))
+
+        while ret is 0:
+            yield pid.value
+            ret = cgroup_get_task_next(byref(handler), byref(pid))
+
+        if ret != ErrorCode.EOF:
+            _raise_error(ret)
+    finally:
+        if handler.value is not None:
+            ret = cgroup_get_task_end(byref(handler))
+            if ret is not 0:
+                _raise_error(ret)
