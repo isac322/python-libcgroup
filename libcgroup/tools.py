@@ -7,12 +7,12 @@ from typing import Callable, Iterable, NoReturn, Optional, Type, TypeVar, Union
 
 from libcgroup_bind.error import ErrorCode, cgroup_get_last_errno, cgroup_strerror
 from libcgroup_bind.groups import (
-    CGroupControllerPointer, cgroup_get_value_bool, cgroup_get_value_int64, cgroup_get_value_string,
+    CGroupControllerPointer, cgroup_get_procs, cgroup_get_value_bool, cgroup_get_value_int64, cgroup_get_value_string,
     cgroup_get_value_uint64, cgroup_set_value_bool, cgroup_set_value_int64, cgroup_set_value_string,
     cgroup_set_value_uint64
 )
 from libcgroup_bind.iterators import (
-    MountPoint, cgroup_get_controller_begin, cgroup_get_controller_end, cgroup_get_controller_next,
+    MountPoint, c_int_p, cgroup_get_controller_begin, cgroup_get_controller_end, cgroup_get_controller_next,
     cgroup_get_task_begin, cgroup_get_task_end, cgroup_get_task_next, cgroup_read_value_begin, cgroup_read_value_end,
     cgroup_read_value_next
 )
@@ -209,3 +209,14 @@ def _get_threads_of(controller: bytes, path: bytes) -> Iterable[int]:
             ret = cgroup_get_task_end(byref(handler))
             if ret is not 0:
                 _raise_error(ret)
+
+
+def _get_processes_of(controller: bytes, path: bytes) -> Iterable[int]:
+    pids = c_int_p()
+    size = c_int()
+
+    ret = cgroup_get_procs(path, controller, byref(pids), byref(size))
+    if ret is not 0:
+        _raise_error(ret)
+
+    return (pids[i] for i in range(size.value))

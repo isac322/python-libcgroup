@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from ctypes import byref, c_char_p, c_int
+from ctypes import byref, c_char_p
 from itertools import chain
 from typing import Callable, Dict, Iterable, Optional, Tuple, Type, TypeVar, Union
 
@@ -11,13 +11,15 @@ from libcgroup_bind.error import ErrorCode
 from libcgroup_bind.groups import (
     CGroupControllerPointer, CGroupPointer, DeleteFlag, cgroup_add_controller, cgroup_compare_cgroup,
     cgroup_create_cgroup, cgroup_delete_cgroup_ext, cgroup_free, cgroup_get_cgroup, cgroup_get_controller,
-    cgroup_get_procs, cgroup_get_value_name, cgroup_get_value_name_count, cgroup_modify_cgroup, cgroup_new_cgroup,
+    cgroup_get_value_name, cgroup_get_value_name_count, cgroup_modify_cgroup, cgroup_new_cgroup,
     cgroup_set_permissions, cgroup_set_uid_gid
 )
-from libcgroup_bind.iterators import c_int_p
 from libcgroup_bind.tasks import cgroup_attach_task, cgroup_attach_task_pid, cgroup_get_current_controller_path
 
-from .tools import _get_from_cached, _get_from_file, _get_threads_of, _raise_error, _set_of, all_controller_names_bytes
+from .tools import (
+    _get_from_cached, _get_from_file, _get_processes_of, _get_threads_of, _raise_error, _set_of,
+    all_controller_names_bytes
+)
 
 
 def _infer_value(value: bytes) -> Union[int, str, None]:
@@ -224,25 +226,11 @@ class CGroup:
             _raise_error(ret)
 
     def get_processes_of(self, controller: str) -> Iterable[int]:
-        pids = c_int_p()
-        size = c_int()
-
-        ret = cgroup_get_procs(self._raw_path, controller.encode(), byref(pids), byref(size))
-        if ret is not 0:
-            _raise_error(ret)
-
-        return (pids[i] for i in range(size.value))
+        return _get_processes_of(controller.encode(), self._raw_path)
 
     def get_processes(self) -> Iterable[int]:
-        pids = c_int_p()
-        size = c_int()
-
         key_controller = next(iter(self._controllers.keys()))
-        ret = cgroup_get_procs(self._raw_path, key_controller, byref(pids), byref(size))
-        if ret is not 0:
-            _raise_error(ret)
-
-        return (pids[i] for i in range(size.value))
+        return _get_processes_of(key_controller, self._raw_path)
 
     def add_processes(self, *processes: int) -> None:
         for tgid in processes:
