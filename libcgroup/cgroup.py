@@ -17,8 +17,7 @@ from libcgroup_bind.groups import (
 from libcgroup_bind.tasks import cgroup_attach_task, cgroup_attach_task_pid, cgroup_get_current_controller_path
 
 from .tools import (
-    _get_from_cached, _get_from_file, _get_processes_of, _get_threads_of, _raise_error, _set_of,
-    all_controller_names_bytes
+    _all_controller_names, _get_from_cached, _get_from_file, _get_processes_of, _get_threads_of, _raise_error, _set_of
 )
 
 
@@ -158,7 +157,7 @@ class CGroup:
             _raise_error(ret)
 
         obj._controllers = dict()
-        for controller in all_controller_names_bytes():
+        for controller in _all_controller_names():
             cg_ctrl = cgroup_get_controller(obj._cgroup, controller)
             if cg_ctrl is not None:
                 obj._controllers[controller] = cg_ctrl

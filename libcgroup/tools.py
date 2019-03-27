@@ -21,7 +21,7 @@ _FT = TypeVar('_FT')
 _BUFFER_LEN = 64
 
 
-def all_controller_names_bytes() -> Iterable[bytes]:
+def _all_controller_names() -> Iterable[bytes]:
     handler = c_void_p()
     controller = MountPoint()
 
@@ -41,7 +41,7 @@ def all_controller_names_bytes() -> Iterable[bytes]:
 
 
 def all_controller_names() -> Iterable[str]:
-    return map(str, all_controller_names_bytes())
+    return map(str, _all_controller_names())
 
 
 def create_c_array(c_type, elements, length=None):
