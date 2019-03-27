@@ -21,7 +21,7 @@ _FT = TypeVar('_FT')
 _BUFFER_LEN = 64
 
 
-def _all_controller_names() -> Iterable[bytes]:
+def _all_controllers() -> Iterable[MountPoint]:
     handler = c_void_p()
     controller = MountPoint()
 
@@ -29,7 +29,7 @@ def _all_controller_names() -> Iterable[bytes]:
         ret = cgroup_get_controller_begin(byref(handler), byref(controller))
 
         while ret is 0:
-            yield controller.name
+            yield controller
             ret = cgroup_get_controller_next(byref(handler), byref(controller))
 
         if ret != ErrorCode.EOF:
@@ -41,7 +41,8 @@ def _all_controller_names() -> Iterable[bytes]:
 
 
 def all_controller_names() -> Iterable[str]:
-    return map(str, _all_controller_names())
+    for mount_point in _all_controllers():
+        yield str(mount_point.name)
 
 
 def create_c_array(c_type, elements, length=None):

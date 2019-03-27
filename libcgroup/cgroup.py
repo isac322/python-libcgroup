@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from ctypes import byref, c_char_p
 from itertools import chain
+from pathlib import Path
 from typing import Callable, Dict, Iterable, Optional, Tuple, Type, TypeVar, Union
 
 from libcgroup_bind.error import ErrorCode
@@ -16,8 +17,9 @@ from libcgroup_bind.groups import (
 )
 from libcgroup_bind.tasks import cgroup_attach_task, cgroup_attach_task_pid, cgroup_get_current_controller_path
 
+from .mount_point import MountPoint
 from .tools import (
-    _all_controller_names, _get_from_cached, _get_from_file, _get_processes_of, _get_threads_of, _raise_error, _set_of
+    _all_controllers, _get_from_cached, _get_from_file, _get_processes_of, _get_threads_of, _raise_error, _set_of
 )
 
 
@@ -157,10 +159,10 @@ class CGroup:
             _raise_error(ret)
 
         obj._controllers = dict()
-        for controller in _all_controller_names():
-            cg_ctrl = cgroup_get_controller(obj._cgroup, controller)
+        for mount_point in _all_controllers():
+            cg_ctrl = cgroup_get_controller(obj._cgroup, mount_point.name)
             if cg_ctrl is not None:
-                obj._controllers[controller] = cg_ctrl
+                obj._controllers[mount_point.name] = cg_ctrl
 
         return obj
 
@@ -175,6 +177,11 @@ class CGroup:
         if ret is not 0:
             _raise_error(ret)
         return cls.from_existing(str(name_path), auto_delete, auto_delete_flag)
+
+    @classmethod
+    def all_controller(cls) -> Iterable[MountPoint]:
+        for mount_point in _all_controllers():
+            yield MountPoint(mount_point.name.decode(), Path(mount_point.path.decode()))
 
     def delete(self, del_flag: DeleteFlag = DeleteFlag.NONE) -> None:
         if self._deleted:
