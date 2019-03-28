@@ -8,7 +8,7 @@ with open('README.md') as fp:
 
 setup(
         name='libcgroup',
-        version='0.1.0',
+        version='0.2.0',
         author='Byeonghoon Yoo',
         author_email='bh322yoo@gmail.com',
         description='A library that handles Linux cgroups internally using the libcgroup shared library.',

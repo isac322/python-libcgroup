@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import os
+import shutil
 from ctypes import byref, c_char_p
 from itertools import chain
 from pathlib import Path
-from typing import Callable, Dict, Iterable, Optional, Tuple, Type, TypeVar, Union
+from typing import Callable, ClassVar, Dict, Iterable, Optional, Tuple, Type, TypeVar, Union
 
 from libcgroup_bind.error import ErrorCode
 from libcgroup_bind.groups import (
@@ -35,6 +36,8 @@ _FT = TypeVar('_FT')
 
 
 class CGroup:
+    root: ClassVar[CGroup]
+    """ .. versionadded:: 0.2.0 """
     _cgroup: CGroupPointer
     _controllers: Dict[bytes, CGroupControllerPointer]
 
@@ -231,6 +234,9 @@ class CGroup:
         if ret is not 0:
             _raise_error(ret)
 
+    def remove_threads(self, *pids: int) -> None:
+        self.root.add_threads(*pids)
+
     def get_processes_of(self, controller: str) -> Iterable[int]:
         return _get_processes_of(controller.encode(), self._raw_path)
 
@@ -240,9 +246,23 @@ class CGroup:
 
     def add_processes(self, *processes: int) -> None:
         for tgid in processes:
-            for name, controller in self._controllers.items():
+            for controller in self._controllers.values():
                 _set_of(controller, b'cgroup.procs', tgid)
                 self._modify()
+
+    def add_current_process(self) -> None:
+        """ .. versionadded:: 0.2.0 """
+        self.add_processes(os.getpid())
+
+    def remove_processes(self, *processes: int) -> None:
+        """ .. versionadded:: 0.2.0 """
+        self.root: CGroup
+
+        for tgid in processes:
+            for name in self._controllers.keys():
+                controller = self.root._controllers[name]
+                _set_of(controller, b'cgroup.procs', tgid)
+                self.root._modify()
 
     def get(self,
             name: str,
@@ -328,3 +348,36 @@ class CGroup:
         ret = cgroup_modify_cgroup(self._cgroup)
         if ret is not 0:
             _raise_error(ret)
+
+    def move_to(self, new_name_path: Union[os.PathLike, str]) -> None:
+        """
+        Move the group pointed to by this object to another path.
+
+        .. versionadded:: 0.2.0
+
+        :param new_name_path: The path where the group will be moved
+        :type new_name_path: os.PathLike or str
+        """
+        for controller in _all_controllers():
+            from_dir = os.path.join(controller.path.decode(), self._path)
+            to_dir = os.path.join(controller.path.decode(), new_name_path)
+
+            if os.path.isdir(from_dir):
+                if os.path.exists(to_dir):
+                    raise FileExistsError(f'{to_dir} is already exist')
+                shutil.move(from_dir, to_dir)
+
+        self._path = new_name_path
+        self._raw_path = str(new_name_path).encode()
+
+        self.reload()
+
+    @property
+    def path(self) -> Path:
+        """ .. versionadded:: 0.2.0 """
+        return Path(self._path)
+
+    @property
+    def controllers(self) -> Tuple[str, ...]:
+        """ .. versionadded:: 0.2.0 """
+        return tuple(map(str, self._controllers.keys()))
