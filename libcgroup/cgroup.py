@@ -380,4 +380,4 @@ class CGroup:
     @property
     def controllers(self) -> Tuple[str, ...]:
         """ .. versionadded:: 0.2.0 """
-        return tuple(map(str, self._controllers.keys()))
+        return tuple(map(lambda x: x.decode(), self._controllers.keys()))
