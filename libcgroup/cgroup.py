@@ -85,16 +85,16 @@ class CGroup:
         self._auto_delete_flag = auto_delete_flag
 
         self._cgroup = cgroup_new_cgroup(str(name_path).encode())
-        if self._cgroup is None:
+        if not self._cgroup:
             _raise_error(ErrorCode.FAIL)
 
         self._controllers = dict()
         for controller_name in chain((first_controller,), controllers):
             cg_ctrl = cgroup_add_controller(self._cgroup, controller_name.encode())
-            if cg_ctrl is None:
+            if cg_ctrl:
+                self._controllers[controller_name.encode()] = cg_ctrl
+            else:
                 _raise_error(ErrorCode.INVAL)
-
-            self._controllers[controller_name.encode()] = cg_ctrl
 
         # set permission
         if dir_mode is not None or file_mode is not None:
@@ -154,7 +154,7 @@ class CGroup:
         obj._auto_delete_flag = auto_delete_flag
 
         obj._cgroup = cgroup_new_cgroup(obj._raw_path)
-        if obj._cgroup is None:
+        if not obj._cgroup:
             _raise_error(ErrorCode.FAIL)
 
         ret = cgroup_get_cgroup(obj._cgroup)
@@ -164,7 +164,7 @@ class CGroup:
         obj._controllers = dict()
         for mount_point in _all_controllers():
             cg_ctrl = cgroup_get_controller(obj._cgroup, mount_point.name)
-            if cg_ctrl is not None:
+            if cg_ctrl:
                 obj._controllers[mount_point.name] = cg_ctrl
 
         return obj
@@ -200,7 +200,7 @@ class CGroup:
         cgroup_free(byref(self._cgroup))
 
         self._cgroup = cgroup_new_cgroup(self._raw_path)
-        if self._cgroup is None:
+        if not self._cgroup:
             _raise_error(ErrorCode.FAIL)
 
         ret = cgroup_get_cgroup(self._cgroup)
@@ -209,7 +209,7 @@ class CGroup:
 
         for controller in self._controllers.keys():
             cg_ctrl = cgroup_get_controller(self._cgroup, controller)
-            if cg_ctrl is not None:
+            if cg_ctrl:
                 self._controllers[controller] = cg_ctrl
             else:
                 _raise_error(ErrorCode.INVAL)
