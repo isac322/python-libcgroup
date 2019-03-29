@@ -187,10 +187,20 @@ class CGroup:
         if not self._cgroup:
             raise ValueError('This group has already been deleted.')
 
-        ret = cgroup_delete_cgroup_ext(self._cgroup, del_flag)
+        cgroup_free(byref(self._cgroup))
+
+        cgroup = cgroup_new_cgroup(self._raw_path)
+
+        for controller in self._controllers:
+            cg_ctrl = cgroup_add_controller(cgroup, controller)
+            if not cg_ctrl:
+                _raise_error(ErrorCode.INVAL)
+
+        ret = cgroup_delete_cgroup_ext(cgroup, del_flag)
         if ret is not 0:
             _raise_error(ret)
-        cgroup_free(byref(self._cgroup))
+
+        cgroup_free(byref(cgroup))
 
     def reload(self) -> None:
         cgroup_free(byref(self._cgroup))
