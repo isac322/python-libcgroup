@@ -124,8 +124,6 @@ class CGroup:
         if ret is not 0:
             _raise_error(ret)
 
-        self.reload()
-
     def __del__(self) -> None:
         if not self._deleted and self._auto_delete:
             self.delete(self._auto_delete_flag)
