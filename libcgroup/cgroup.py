@@ -45,7 +45,6 @@ class CGroup:
     _raw_path: bytes
     _auto_delete: bool
     _auto_delete_flag: DeleteFlag
-    _deleted: bool = False
 
     def __init__(self, name_path: Union[os.PathLike, str], first_controller: str, *controllers: str,
                  dir_mode: int = None, file_mode: int = None, tasks_mode: int = None,
@@ -125,7 +124,7 @@ class CGroup:
             _raise_error(ret)
 
     def __del__(self) -> None:
-        if not self._deleted and self._auto_delete:
+        if self._cgroup and self._auto_delete:
             self.delete(self._auto_delete_flag)
 
     def __eq__(self, other: CGroup) -> bool:
@@ -185,10 +184,9 @@ class CGroup:
             yield MountPoint(mount_point.name.decode(), Path(mount_point.path.decode()))
 
     def delete(self, del_flag: DeleteFlag = DeleteFlag.NONE) -> None:
-        if self._deleted:
+        if not self._cgroup:
             raise ValueError('This group has already been deleted.')
 
-        self._deleted = True
         ret = cgroup_delete_cgroup_ext(self._cgroup, del_flag)
         if ret is not 0:
             _raise_error(ret)
